@@ -2,7 +2,7 @@
 name = "allowance"
 description = "Rust Datatype to representate the deviation of measures."
 repository = "https://github.com/migmedia/allowance"
-version = "0.6.0"
+version = "0.8.0"
 authors = ["Micha Glave <coding@migmedia.de>"]
 edition = "2021"
 license = "MIT"
