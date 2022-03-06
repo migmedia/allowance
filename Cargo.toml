@@ -7,7 +7,6 @@ authors = ["Micha Glave <coding@migmedia.de>"]
 edition = "2021"
 license = "MIT"
 readme = "README.md"
-publish = ["xilab"]
 
 [lib]
 
