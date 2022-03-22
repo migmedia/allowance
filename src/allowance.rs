@@ -44,12 +44,11 @@ impl AllowanceValue {
     /// Provided parameters as `f64` are interpreted as `mm`-values.
     ///
     #[inline]
-    pub fn new<V, TP, TM>(value: V, plus: TP, minus: TM) -> Self
-    where
-        V: Into<Measure>,
-        TP: Into<Measure32>,
-        TM: Into<Measure32>,
-    {
+    pub fn new(
+        value: impl Into<Measure>,
+        plus: impl Into<Measure32>,
+        minus: impl Into<Measure32>,
+    ) -> Self {
         let plus = plus.into();
         let minus = minus.into();
         assert!(plus >= minus);
@@ -62,7 +61,7 @@ impl AllowanceValue {
 
     /// Creates a `AllowanceValue` with symmetrical tolerances.
     ///
-    pub fn with_sym<V: Into<Measure>, T: Into<Measure32>>(value: V, tol: T) -> Self {
+    pub fn with_sym(value: impl Into<Measure>, tol: impl Into<Measure32>) -> Self {
         let tol = tol.into();
         Self::new(value, tol, -tol)
     }
@@ -75,7 +74,7 @@ impl AllowanceValue {
 
     /// narrows a `AllowanceValue` to the given symmetric tolerances.
     ///
-    pub fn narrow_sym<M: Into<Measure32>>(&self, tol: M) -> Self {
+    pub fn narrow_sym(&self, tol: impl Into<Measure32>) -> Self {
         let tol = tol.into();
         Self::new(self.value, tol, -tol)
     }
@@ -100,7 +99,7 @@ impl AllowanceValue {
 
     /// returns `true`, if `this` tolerance is less strict (around) the `other`.
     ///
-    pub fn embrace<A: Into<AllowanceValue>>(&self, other: A) -> bool {
+    pub fn embrace(&self, other: impl Into<AllowanceValue>) -> bool {
         let other = other.into();
         self.lower_limit() <= other.lower_limit() && self.upper_limit() >= other.upper_limit()
     }
