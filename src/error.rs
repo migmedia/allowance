@@ -1,9 +1,10 @@
 use std::fmt::{Display, Formatter};
-use std::num::ParseFloatError;
+use std::num::{ParseFloatError, TryFromIntError};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum AllowanceError {
     ParseError(String),
+    Overflow(String),
 }
 
 impl std::error::Error for AllowanceError {}
@@ -20,10 +21,17 @@ impl From<ParseFloatError> for AllowanceError {
     }
 }
 
+impl From<TryFromIntError> for AllowanceError {
+    fn from(t: TryFromIntError) -> Self {
+        AllowanceError::Overflow(t.to_string())
+    }
+}
+
 impl Display for AllowanceError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let text = match self {
             AllowanceError::ParseError(text) => text.as_str(),
+            AllowanceError::Overflow(text) => text.as_str(),
         };
         write!(f, "{}", text)
     }

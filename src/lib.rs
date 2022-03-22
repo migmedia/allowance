@@ -23,9 +23,15 @@
 //! // Adding an inverted `AllowanceValue` wides the tolerance.
 //! assert_eq!(width1 + !width1, AllowanceValue::new(0.0, 0.25, -0.25));
 //! ```
+extern crate core;
+
 mod allowance;
 pub mod error;
 mod measure;
+mod measure32;
+mod unit;
 
 pub use self::allowance::*;
 pub use self::measure::*;
+pub use self::measure32::*;
+pub use self::unit::*;

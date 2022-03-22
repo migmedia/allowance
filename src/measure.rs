@@ -1,3 +1,5 @@
+use super::Measure32;
+use super::Unit;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
@@ -17,7 +19,7 @@ use std::ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign};
 /// The standard `Display::fmt`-methode represents the value in `mm`. The *alternate* Display
 /// shows the `i64` value.
 ///
-/// As 10_000 = 1 mm  
+/// As 10_000 = 1 mm
 ///
 /// ### Example:
 /// ```rust
@@ -34,47 +36,14 @@ use std::ops::{Add, AddAssign, Deref, Div, Mul, Neg, Sub, SubAssign};
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Measure(i64);
 
-pub enum Unit {
-    /// my-meter `μ`
-    MY,
-    /// millimeter `1 mm = 1000 μ`
-    MM,
-    /// centimeter `1 cm = 10 mm = 10_000 μ`
-    CM,
-    /// meter `100 cm = 1_000 mm = 1_000_000 μ`
-    METER,
-    /// kilometer `1 km = 1_000 m`
-    KM,
-    /// as exponent `10 ^ x`
-    DYN(usize),
-}
-
-impl From<Unit> for Measure {
-    fn from(unit: Unit) -> Self {
-        Measure(unit.multiply())
-    }
-}
-
-impl Unit {
-    fn multiply(&self) -> i64 {
-        use Unit::*;
-        match self {
-            MY => Measure::MY,
-            MM => Measure::MY * 1_000,
-            CM => Measure::MY * 10_000,
-            METER => Measure::MY * 1_000_000,
-            KM => Measure::MY * 1_000_000_000,
-            DYN(p) => (0..*p).fold(1i64, |acc, _| acc * 10),
-        }
-    }
-}
-
 impl Measure {
     pub const MY: i64 = 10;
     pub const MM: Measure = Measure(1_000 * Self::MY);
     pub const ZERO: Measure = Measure(0);
-    pub const MAX: Measure = Measure(1000000000000000000);
-    pub const MIN: Measure = Measure(-1000000000000000000);
+    /// Holds at MAX 100_000_000 km
+    pub const MAX: Measure = Measure(i64::MAX);
+    /// Holds at MIN -100_000_000 km
+    pub const MIN: Measure = Measure(i64::MIN);
 
     pub fn as_i64(&self) -> i64 {
         self.0
@@ -85,20 +54,24 @@ impl Measure {
         (self.0 as f64) / Unit::MM.multiply() as f64
     }
 
-    /// Returns the value in the given `Unit`.   
+    /// Returns the value in the given `Unit`.
     pub fn as_prec(&self, unit: Unit) -> f64 {
         (self.0 as f64) / unit.multiply() as f64
     }
 
     /// Rounds to the given Unit.
     pub fn round(&self, unit: Unit) -> Self {
-        let val = if self.0 < 0 {
-            self.0 - unit.multiply() / 2
-        } else {
-            self.0 + unit.multiply() / 2
-        };
-        let clip = val % unit.multiply();
-        Measure(val - clip)
+        if unit.multiply() == 0 {
+            return *self;
+        }
+        let m = unit.multiply();
+        let clip = self.0 % m;
+        match m / 2 {
+            _ if clip == 0 => *self, // don't round
+            x if clip <= -x => Measure(self.0 - clip - m),
+            x if clip >= x => Measure(self.0 - clip + m),
+            _ => Measure(self.0 - clip),
+        }
     }
 
     pub fn floor(&self, unit: Unit) -> Self {
@@ -197,21 +170,18 @@ impl TryFrom<String> for Measure {
 impl Display for Measure {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let p = f.precision().map(|p| p.min(4)).unwrap_or(4);
+        assert!(p <= 4, "Measure has a limited precision of 4!");
         if f.alternate() {
             Display::fmt(&self.0, f)
         } else {
-            let mut s = self.round(Unit::DYN(4 - p)).0.abs().to_string();
-            let len = 5 - s.len().min(5);
-            (0..len).for_each(|_| s = String::from("0") + &s);
+            let val = self.round(Unit::DYN(4 - p)).0;
+            let l = if val.is_negative() { 6 } else { 5 };
+            let mut s = format!("{val:0l$}");
             if p > 0 {
                 s.insert(s.len() - 4, '.');
             }
             s.truncate(s.len() - (4 - p));
-            if self.0 < 0 {
-                write!(f, "-{s}")
-            } else {
-                write!(f, "{s}")
-            }
+            write!(f, "{s}")
         }
     }
 }
@@ -222,7 +192,7 @@ impl Debug for Measure {
         let n = if val.is_negative() { 6 } else { 5 };
         let mut m = format!("{val:0n$}");
         m.insert(m.len() - 4, '.');
-        write!(f, "Measure({})", m)
+        write!(f, "Measure({m})")
     }
 }
 
@@ -242,9 +212,23 @@ impl Add for Measure {
     }
 }
 
+impl Add<Measure32> for Measure {
+    type Output = Measure;
+
+    fn add(self, rhs: Measure32) -> Self::Output {
+        Self(self.0 + rhs.as_i32() as i64)
+    }
+}
+
 impl AddAssign for Measure {
     fn add_assign(&mut self, rhs: Self) {
         self.0 += rhs.0;
+    }
+}
+
+impl AddAssign<Measure32> for Measure {
+    fn add_assign(&mut self, rhs: Measure32) {
+        self.0 += rhs.as_i32() as i64;
     }
 }
 
@@ -256,9 +240,23 @@ impl Sub for Measure {
     }
 }
 
+impl Sub<Measure32> for Measure {
+    type Output = Measure;
+
+    fn sub(self, rhs: Measure32) -> Self::Output {
+        Self(self.0 - rhs.as_i32() as i64)
+    }
+}
+
 impl SubAssign for Measure {
     fn sub_assign(&mut self, rhs: Self) {
         self.0 -= rhs.0;
+    }
+}
+
+impl SubAssign<Measure32> for Measure {
+    fn sub_assign(&mut self, rhs: Measure32) {
+        self.0 -= rhs.as_i32() as i64;
     }
 }
 
@@ -326,18 +324,25 @@ mod should {
     #[test]
     fn round() {
         let m = Measure(1234567);
-        assert_eq!(m.round(Unit::MY), Measure(1234570));
-        assert_eq!(m.round(Unit::CM), Measure(1200000));
-        assert_eq!(Measure(9_999_000).round(Unit::MM), Measure(10_000_000));
-        assert_eq!(Measure::from(-0.4993).round(Unit::MM), Measure(0));
-        assert_eq!(Measure::from(-0.4993).round(Unit::MY), Measure(-4990));
+        assert_eq!(Measure(1234570), m.round(Unit::MY));
+        assert_eq!(Measure(1200000), m.round(Unit::CM));
+        assert_eq!(Measure(10_000_000), Measure(9_999_000).round(Unit::MM));
+        assert_eq!(Measure(0), Measure::from(-0.4993).round(Unit::MM));
+        assert_eq!(Measure(-4990), Measure::from(-0.4993).round(Unit::MY));
+        assert_eq!(Measure(-10000), Measure::from(-5000).round(Unit::MM));
         let m = Measure::from(340.993);
-        assert_eq!(Unit::DYN(0).multiply(), 1);
-        assert_eq!(m.round(Unit::DYN(0)), Measure(3409930));
-        assert_eq!(Unit::DYN(2).multiply(), 100);
-        assert_eq!(m.round(Unit::DYN(2)), Measure(3409900));
-        assert_eq!(Unit::DYN(3).multiply(), 1000);
-        assert_eq!(m.round(Unit::DYN(3)), Measure(3410000));
+        assert_eq!(10, Unit::DYN(1).multiply());
+        assert_eq!(Measure(3409930), m.round(Unit::DYN(1)));
+        assert_eq!(100, Unit::DYN(2).multiply());
+        assert_eq!(Measure(3409900), m.round(Unit::DYN(2)));
+        assert_eq!(1000, Unit::DYN(3).multiply());
+        assert_eq!(Measure(3410000), m.round(Unit::DYN(3)));
+        assert_eq!(Measure(3400000), m.floor(Unit::DYN(4)));
+        assert_eq!(-340.000, -340.993_f64.floor());
+        assert_eq!(
+            Measure(-3400000),
+            Measure::from(-340.993).floor(Unit::DYN(4))
+        );
     }
 
     #[test]
@@ -363,9 +368,8 @@ mod should {
     fn min_max() {
         let max = Measure::MAX;
         let min = Measure::MIN;
-        assert_eq!(max.to_string(), "100000000000000.0000");
-        assert_eq!(min.to_string(), "-100000000000000.0000");
-        assert_eq!(format!("{min:.0}"), "-100000000000000");
+        assert_eq!(max.0, 9223372036854775807);
+        assert_eq!(min.0, -9223372036854775808);
     }
 
     #[test]
@@ -374,6 +378,6 @@ mod should {
         assert_eq!(m.as_prec(Unit::CM), 1245.6832);
         assert_eq!(m.as_prec(Unit::METER), 12.456832);
         let m = Measure::MAX;
-        assert_eq!(m.as_prec(Unit::KM), 100_000_000f64);
+        assert_eq!(m.as_prec(Unit::KM), 922337203.6854776);
     }
 }

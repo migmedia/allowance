@@ -4,12 +4,15 @@ use std::fmt::Debug;
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Mul, Not, Sub};
 
-use crate::{error, Measure};
+use crate::error::AllowanceError::ParseError;
+use crate::{error, Measure, Measure32};
 
 /// # AllowanceValue
 ///
-/// A type to hold values with an allowance ("Toleranz"). Based on [Measure](./struct.Measure.html) with
-/// helper methods to set and show values translated into mm. Stores all values internally in 0.1μ.
+/// A 128bit wide type to hold values with an allowance ("Toleranz"). Based on
+/// [Measure](./struct.Measure.html) and [Measure32](./struct.Measure32.html) with helper methods
+/// to set and show values translated into mm.
+/// Stores all values internally in 0.1μ.
 ///
 /// ```rust
 /// # use allowance::AllowanceValue;
@@ -25,15 +28,15 @@ use crate::{error, Measure};
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct AllowanceValue {
     pub value: Measure,
-    pub plus: Measure,
-    pub minus: Measure,
+    pub plus: Measure32,
+    pub minus: Measure32,
 }
 
 impl AllowanceValue {
     pub const ZERO: AllowanceValue = AllowanceValue {
         value: Measure::ZERO,
-        plus: Measure::ZERO,
-        minus: Measure::ZERO,
+        plus: Measure32::ZERO,
+        minus: Measure32::ZERO,
     };
 
     /// Creates a `AllowanceValue` with asymmetrical tolerances.
@@ -44,8 +47,8 @@ impl AllowanceValue {
     pub fn new<V, TP, TM>(value: V, plus: TP, minus: TM) -> Self
     where
         V: Into<Measure>,
-        TP: Into<Measure>,
-        TM: Into<Measure>,
+        TP: Into<Measure32>,
+        TM: Into<Measure32>,
     {
         let plus = plus.into();
         let minus = minus.into();
@@ -59,20 +62,20 @@ impl AllowanceValue {
 
     /// Creates a `AllowanceValue` with symmetrical tolerances.
     ///
-    pub fn with_sym<M: Into<Measure>>(value: M, tol: M) -> Self {
+    pub fn with_sym<V: Into<Measure>, T: Into<Measure32>>(value: V, tol: T) -> Self {
         let tol = tol.into();
         Self::new(value, tol, -tol)
     }
 
     /// narrows a `AllowanceValue` to the given tolerances.
     ///
-    pub fn narrow<M: Into<Measure>>(&self, plus: M, minus: M) -> Self {
+    pub fn narrow<M: Into<Measure32>>(&self, plus: M, minus: M) -> Self {
         Self::new(self.value, plus, minus)
     }
 
     /// narrows a `AllowanceValue` to the given symmetric tolerances.
     ///
-    pub fn narrow_sym<M: Into<Measure>>(&self, tol: M) -> Self {
+    pub fn narrow_sym<M: Into<Measure32>>(&self, tol: M) -> Self {
         let tol = tol.into();
         Self::new(self.value, tol, -tol)
     }
@@ -217,34 +220,18 @@ impl Default for AllowanceValue {
     }
 }
 
-impl Mul<AllowanceValue> for Measure {
-    type Output = AllowanceValue;
-
-    fn mul(self, rsh: AllowanceValue) -> AllowanceValue {
-        AllowanceValue {
-            value: self * rsh.value,
-            plus: self * rsh.plus,
-            minus: self * rsh.minus,
-        }
-    }
-}
-
 impl std::fmt::Display for AllowanceValue {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let (v, t) = match f.precision() {
-            Some(p) => (p, p + 1),
-            None => (2, 3),
-        };
-        let val = self.value;
-        let plu = self.plus;
-        let min = self.minus;
+        let (v, t) = f.precision().map(|p| (p, p + 1)).unwrap_or((2, 3));
+        let Self { value, plus, .. } = self;
+        let minus = &-self.minus;
         if f.alternate() {
-            return write!(f, "{val:#.v$} +{plu:#.t$}/{min:#.t$}");
+            return write!(f, "{value:#.v$} +{plus:#.t$}/-{minus:#.t$}");
         }
-        if self.plus == -self.minus {
-            write!(f, "{val:.v$} +/-{plu:.t$}",)
+        if plus == minus {
+            write!(f, "{value:.v$} +/-{plus:.t$}")
         } else {
-            write!(f, "{val:.v$} +{plu:.t$}/{min:.t$}")
+            write!(f, "{value:.v$} +{plus:.t$}/-{minus:.t$}")
         }
     }
 }
@@ -275,7 +262,7 @@ where
 impl<V, T> From<(V, T)> for AllowanceValue
 where
     V: Into<Measure>,
-    T: Into<Measure>,
+    T: Into<Measure32>,
 {
     fn from(v: (V, T)) -> Self {
         let t = v.1.into();
@@ -286,8 +273,8 @@ where
 impl<V, P, M> From<(V, P, M)> for AllowanceValue
 where
     V: Into<Measure>,
-    P: Into<Measure>,
-    M: Into<Measure>,
+    P: Into<Measure32>,
+    M: Into<Measure32>,
 {
     fn from(v: (V, P, M)) -> Self {
         AllowanceValue::new(v.0, v.1, v.2)
@@ -321,8 +308,8 @@ multiply_all!(u64, u32, i64, i32);
 impl<V, P, M> TryFrom<(Option<V>, Option<P>, Option<M>)> for AllowanceValue
 where
     V: Into<Measure> + Debug,
-    P: Into<Measure> + Debug,
-    M: Into<Measure> + Debug,
+    P: Into<Measure32> + Debug,
+    M: Into<Measure32> + Debug,
 {
     type Error = error::AllowanceError;
 
@@ -334,7 +321,7 @@ where
                 Ok(AllowanceValue::new(v, p, -p))
             }
             (Some(v), None, None) => Ok(AllowanceValue::new(v, 0, 0)),
-            _ => Err(error::AllowanceError::ParseError(format!(
+            _ => Err(ParseError(format!(
                 "AllowanceValue not parsable from '{:?}'",
                 triple
             ))),
@@ -347,10 +334,10 @@ impl TryFrom<(Option<&i64>, Option<&i64>, Option<&i64>)> for AllowanceValue {
 
     fn try_from(triple: (Option<&i64>, Option<&i64>, Option<&i64>)) -> Result<Self, Self::Error> {
         match triple {
-            (Some(&v), Some(&p), Some(&m)) => Ok(AllowanceValue::new(v, p, m)),
-            (Some(&v), Some(&p), None) => Ok(AllowanceValue::new(v, p, -p)),
+            (Some(&v), Some(&p), Some(&m)) => Ok(AllowanceValue::new(v, p as i32, m as i32)),
+            (Some(&v), Some(&p), None) => Ok(AllowanceValue::new(v, p as i32, -p as i32)),
             (Some(&v), None, None) => Ok(AllowanceValue::new(v, 0, 0)),
-            _ => Err(error::AllowanceError::ParseError(format!(
+            _ => Err(ParseError(format!(
                 "AllowanceValue not parsable from '{:?}'",
                 triple
             ))),
@@ -474,15 +461,16 @@ mod should {
         use AllowanceError::ParseError;
         let a = AllowanceValue::try_from("nil");
         assert!(a.is_err(), "AllowanceValue ");
-        let ParseError(err) = a.unwrap_err();
-        assert_eq!(err, String::from("invalid allowance literal"));
+        assert_eq!(
+            a.unwrap_err(),
+            ParseError(String::from("invalid allowance literal"))
+        );
 
         let a = AllowanceValue::try_from("");
         assert!(a.is_err(), "AllowanceValue ");
-        let ParseError(err) = a.unwrap_err();
         assert_eq!(
-            err,
-            String::from("cannot parse allowance from empty string")
+            a.unwrap_err(),
+            ParseError(String::from("cannot parse allowance from empty string"))
         );
     }
 }
