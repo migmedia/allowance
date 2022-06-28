@@ -26,12 +26,16 @@
 extern crate core;
 
 mod allowance;
+mod allowance64;
 pub mod error;
 mod measure;
+mod measure16;
 mod measure32;
 mod unit;
 
 pub use self::allowance::*;
+pub use self::allowance64::*;
 pub use self::measure::*;
+pub use self::measure16::*;
 pub use self::measure32::*;
 pub use self::unit::*;

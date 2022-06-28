@@ -40,9 +40,9 @@ impl Measure {
     pub const MY: i64 = 10;
     pub const MM: Measure = Measure(1_000 * Self::MY);
     pub const ZERO: Measure = Measure(0);
-    /// Holds at MAX 100_000_000 km
+    /// Holds at MAX 922_337_203 km
     pub const MAX: Measure = Measure(i64::MAX);
-    /// Holds at MIN -100_000_000 km
+    /// Holds at MIN -922_337_203 km
     pub const MIN: Measure = Measure(i64::MIN);
 
     pub fn as_i64(&self) -> i64 {
@@ -139,8 +139,18 @@ macro_rules! measure_from_number {
 
 measure_from_number!(u64, u32, u16, u8, usize, i64, i32, i16, i8, isize);
 
+impl From<Unit> for Measure {
+    fn from(unit: Unit) -> Self {
+        Measure::from(unit.multiply())
+    }
+}
+
 impl From<f64> for Measure {
     fn from(f: f64) -> Self {
+        assert!(
+            f < i64::MAX as f64 && f > i64::MIN as f64,
+            "i64 overflow, the f64 is beyond the limits of this type (Measure)."
+        );
         Self((f * Measure::MM.as_i64() as f64) as i64)
     }
 }

@@ -23,3 +23,15 @@ fn main() {
     assert_eq!(width1 + !width1, AllowanceValue::new(0.0, 0.25, -0.25));
 }
 ```
+
+### Limits 
+
+#### Allowance
+
+A 128bit wide value. Based on a `Measure` (64bit) for the value it could handle sizes up to +/-922_337_203 km 
+with a variance of +/-214 m (`Measure32`). 
+
+#### Allowance64
+
+based on a `Measure32` (32bit) for the value it could handle sizes up to +/-214 m
+with a variance of +/-3 mm (`Measure16`). 

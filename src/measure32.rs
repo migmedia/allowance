@@ -68,13 +68,13 @@ impl Measure32 {
         if unit.multiply() == 0 {
             return *self;
         }
-        let m = unit.multiply() as i32;
-        let clip = self.0 % m;
+        let m = unit.multiply();
+        let clip = self.0 as i64 % m;
         match m / 2 {
             _ if clip == 0 => *self, // don't round
-            x if clip <= -x => Measure32(self.0 - clip - m),
-            x if clip >= x => Measure32(self.0 - clip + m),
-            _ => Measure32(self.0 - clip),
+            x if clip <= -x => Measure32::from(self.0 as i64 - clip - m),
+            x if clip >= x => Measure32::from(self.0 as i64 - clip + m),
+            _ => Measure32(self.0 - clip as i32),
         }
     }
 
@@ -90,6 +90,10 @@ macro_rules! measure32_from_number {
         $(
             impl From<$typ> for Measure32 {
                 fn from(a: $typ) -> Self {
+                    assert!(
+                        a < i32::MAX as $typ && a > i32::MIN as $typ,
+                        "i32 overflow, the source-type is beyond the limits of this type (Measure32)."
+                    );
                     Self(a as i32)
                 }
             }
@@ -143,8 +147,18 @@ macro_rules! measure32_from_number {
 
 measure32_from_number!(u64, u32, u16, u8, usize, i64, i32, i16, i8);
 
+impl From<Unit> for Measure32 {
+    fn from(unit: Unit) -> Self {
+        Measure32::from(unit.multiply())
+    }
+}
+
 impl From<f64> for Measure32 {
     fn from(f: f64) -> Self {
+        assert!(
+            f < i32::MAX as f64 && f > i32::MIN as f64,
+            "i32 overflow, the f64 is beyond the limits of this type (Measure32)."
+        );
         Self((f * Measure32::MM.as_i32() as f64) as i32)
     }
 }
