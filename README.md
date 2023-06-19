@@ -5,6 +5,11 @@ inaccuracy.
 
 Based of type `Measure` with a accuracy of 1/10th my-meter (= 0.1μ).
 
+# Future
+
+This project was renamed 'Tolerance' for better clarity and moved to [NORICS-net/tolerance](https://github.com/NORICS-net/tolerance/). 
+
+
 ### Exaxmple
 ```rust
 use allowance::AllowanceValue;
